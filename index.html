@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contador de clics</title>
+  <style>
+    /* Variables de diseño: colores y medidas reutilizables */
+    :root {
+      --fondo-1: #0f0c29;
+      --fondo-2: #302b63;
+      --fondo-3: #24243e;
+      --acento-1: #8e7dff;
+      --acento-2: #ff6fb5;
+      --texto: #f4f2ff;
+      --texto-suave: rgba(244, 242, 255, 0.6);
+      --boton-tamano: min(60vw, 240px);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* Fondo con degradado oscuro que ocupa toda la pantalla */
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2rem;
+      padding: 1rem;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: var(--texto);
+      background: linear-gradient(135deg, var(--fondo-1), var(--fondo-2), var(--fondo-3));
+      user-select: none;
+    }
+
+    .etiqueta {
+      font-size: 0.85rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--texto-suave);
+    }
+
+    /* Número central del contador */
+    .contador {
+      font-size: clamp(4rem, 18vw, 7rem);
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+
+    /* Animación del número al sumar */
+    .contador.salto {
+      animation: salto 0.3s ease-out;
+    }
+
+    @keyframes salto {
+      0% { transform: scale(1); }
+      40% { transform: scale(1.25); color: var(--acento-2); }
+      100% { transform: scale(1); }
+    }
+
+    /* Botón circular grande */
+    .boton-clic {
+      position: relative;
+      width: var(--boton-tamano);
+      height: var(--boton-tamano);
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 1.4rem;
+      font-weight: 600;
+      color: var(--texto);
+      background: linear-gradient(145deg, var(--acento-1), var(--acento-2));
+      box-shadow: 0 20px 50px rgba(142, 125, 255, 0.4);
+      transition: transform 0.1s ease, box-shadow 0.2s ease;
+    }
+
+    .boton-clic:hover {
+      box-shadow: 0 24px 60px rgba(255, 111, 181, 0.5);
+    }
+
+    /* Efecto de "presionado" */
+    .boton-clic:active {
+      transform: scale(0.94);
+    }
+
+    .boton-clic:focus-visible,
+    .boton-reiniciar:focus-visible {
+      outline: 3px solid var(--texto);
+      outline-offset: 6px;
+    }
+
+    /* Onda que se expande desde el botón al hacer clic */
+    .onda {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 3px solid var(--acento-2);
+      animation: onda 0.6s ease-out forwards;
+      pointer-events: none;
+    }
+
+    @keyframes onda {
+      from { transform: scale(1); opacity: 1; }
+      to { transform: scale(1.6); opacity: 0; }
+    }
+
+    /* Mensaje de logro (10, 50, 100) */
+    .mensaje {
+      min-height: 1.5em;
+      font-size: 1.1rem;
+      text-align: center;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.4s ease, transform 0.4s ease;
+    }
+
+    .mensaje.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* Botón secundario para reiniciar */
+    .boton-reiniciar {
+      padding: 0.7rem 1.6rem;
+      border: 1px solid var(--texto-suave);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--texto-suave);
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: color 0.2s ease, border-color 0.2s ease;
+    }
+
+    .boton-reiniciar:hover {
+      color: var(--texto);
+      border-color: var(--texto);
+    }
+
+    /* Respeta a quien prefiere menos movimiento */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation: none !important;
+        transition: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <p class="etiqueta">Clics</p>
+  <p class="contador" id="contador" aria-live="polite">0</p>
+
+  <button class="boton-clic" id="boton-clic">Clic</button>
+
+  <p class="mensaje" id="mensaje" role="status"></p>
+
+  <button class="boton-reiniciar" id="boton-reiniciar">Reiniciar</button>
+
+  <script>
+    // Clave con la que guardamos el conteo en localStorage
+    const CLAVE = 'contador-clics';
+
+    // Mensajes que aparecen al llegar a ciertos números
+    const LOGROS = {
+      10: '¡10 clics! Buen comienzo 🎉',
+      50: '¡50 clics! Vas en serio 🔥',
+      100: '¡100 clics! Leyenda del clic 🏆'
+    };
+
+    // Referencias a los elementos de la página
+    const contadorEl = document.getElementById('contador');
+    const botonClic = document.getElementById('boton-clic');
+    const botonReiniciar = document.getElementById('boton-reiniciar');
+    const mensajeEl = document.getElementById('mensaje');
+
+    // Leemos el conteo guardado (o 0 si no hay nada)
+    let conteo = leerConteo();
+    contadorEl.textContent = conteo;
+
+    function leerConteo() {
+      try {
+        return Number(localStorage.getItem(CLAVE)) || 0;
+      } catch {
+        return 0;
+      }
+    }
+
+    function guardarConteo() {
+      try {
+        localStorage.setItem(CLAVE, conteo);
+      } catch {
+        // Si el navegador bloquea localStorage, el contador sigue funcionando sin guardar
+      }
+    }
+
+    // Reinicia la animación del número quitando y poniendo la clase
+    function animarNumero() {
+      contadorEl.classList.remove('salto');
+      void contadorEl.offsetWidth; // fuerza al navegador a "olvidar" la animación anterior
+      contadorEl.classList.add('salto');
+    }
+
+    // Crea una onda dentro del botón y la borra al terminar
+    function crearOnda() {
+      const onda = document.createElement('span');
+      onda.className = 'onda';
+      botonClic.appendChild(onda);
+      onda.addEventListener('animationend', () => onda.remove());
+    }
+
+    function mostrarMensaje(texto) {
+      mensajeEl.textContent = texto;
+      mensajeEl.classList.add('visible');
+    }
+
+    function ocultarMensaje() {
+      mensajeEl.classList.remove('visible');
+    }
+
+    // Al hacer clic: sumamos, guardamos, animamos y revisamos logros
+    botonClic.addEventListener('click', () => {
+      conteo++;
+      contadorEl.textContent = conteo;
+      guardarConteo();
+      animarNumero();
+      crearOnda();
+
+      if (LOGROS[conteo]) {
+        mostrarMensaje(LOGROS[conteo]);
+      } else {
+        ocultarMensaje();
+      }
+    });
+
+    // Al reiniciar: volvemos a 0 y limpiamos el mensaje
+    botonReiniciar.addEventListener('click', () => {
+      conteo = 0;
+      contadorEl.textContent = conteo;
+      guardarConteo();
+      ocultarMensaje();
+    });
+  </script>
+</body>
+</html>
